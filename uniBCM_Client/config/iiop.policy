@@ -1,0 +1,30 @@
+/* AUTOMATICALLY BY uniBCM Team*/
+/* DO NOT EDIT */
+/* CONFIG FILE */
+
+grant codeBase "_CLIENTPROT_CLIENTPATH" {
+  //_COMMENT permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:_PORT", "connect, resolve";
+  //_FILE permission java.io.FilePermission "_SERVERHOME/public_html/uniBCM/-", "read";
+  //_HTTP permission java.io.FilePermission "http://_UNIBCMSERVER._DOMAIN:_PORT/-", "read";
+
+  //per completezza: non necessari al fine del corretto funzionamento
+  permission java.awt.AWTPermission "showWindowWithoutWarningBanner";
+  permission java.lang.RuntimePermission "exitVM";
+  permission java.lang.RuntimePermission "accessClassInPackage.sun.swing";
+
+  permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:5555", "connect, resolve";
+  permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:10000-", "connect, resolve";
+};
+
+grant codeBase "_PROTOCOL_PATH/-" {
+  //_COMMENT permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:_PORT", "connect, resolve";
+
+  //per completezza: non necessari al fine del corretto funzionamento
+  permission java.awt.AWTPermission "showWindowWithoutWarningBanner";
+  permission java.lang.RuntimePermission "exitVM";
+  permission java.lang.RuntimePermission "accessClassInPackage.sun.swing";
+
+  permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:5555", "connect, resolve";
+  permission java.net.SocketPermission "_UNIBCMSERVER._DOMAIN:10000-", "connect, resolve";
+};
+

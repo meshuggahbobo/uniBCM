@@ -1,0 +1,324 @@
+#!/bin/bash
+
+###############################################################################################
+# uniBCM Project: an exams's management system for university, developed with Java RMI
+# 
+# Copyleft 2009  uniBCM Team(Alberto Cordioli, Andrea Oboe)
+#
+# This program is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License as published by the Free Software Foundation, either
+# version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see http://www.gnu.org/licenses/.
+# 
+# E-Mail:	cordioli [dot] alberto [at] gmail [dot] com
+#  			oboe [dot] andrea [at] gmail [dot] com
+################################################################################################
+
+# Script di compilazione, configurazione e di lancio dei server del sistema uniBCM
+
+################################  N O T A    B E N E ##################################
+# Se si utilizza il protocollo http assicurarsi di aver prima lanciato tale servizio ##
+# sulla macchina corrente. Su kde è possibile lanciarlo e configurarlo grazie        ##
+# all'applet kpf.								     ##
+#######################################################################################
+
+################################  PARAMETRI DI CONFIGURAZIONE ##################################
+# Settare la variabile qui sotto definita inserendo la porta su cui
+# verra' esportato il servizio di http della macchina corrente.
+PORT=8001
+################################################################################################
+
+
+# Elenco pacchetti da compilare
+pkg_list=("lib mobile server client setup all")
+# Elenco gruppi pacchetti da compilare
+lib=("lib")
+mobile=("mobile mobile/magent mobile/mserver")
+server=("server/proxy server/reg server/login server/central")
+client=("client/")
+setup=(".")
+all=("lib mobile/ mobile/magent mobile/mserver server/proxy server/reg server/login server/central client .")
+
+failure(){
+
+	if [ ! $? -eq 0 ]; then
+		echo -e "\033[31mERRORE!\033[0m" >&2
+		echo
+		echo -e "\033[33mVedere file .log per descrizione dettagliata degli errori.\033[0m"
+		echo
+	    exit 1
+	else
+		echo -e "\033[31mOK!\033[0m"
+	fi
+
+}
+
+compile(){
+
+	for var in $@
+	do
+		if [ $var = . ]; then
+			echo -en "[*] Compilazione file in $PWD...\t"
+		else
+			echo -en "[*] Compilazione file in $var...\t"
+		fi
+		javac $PWD/$var/*.java 2>> $PWD/.log || failure
+		echo -e "\033[31mOK!\033[0m"
+	done
+
+}
+
+clean(){
+	
+	for var in $@
+	do
+		rm -f $PWD/$var/*~
+		rm -f $PWD/$var/.*
+		rm -f $PWD/$var/*.class
+		if [ $var = . ]; then
+			echo -e "[*] Pulizia della directory $PWD...\t\033[31mOK!\033[0m"
+		else
+			echo -e "[*] Pulizia della directory $var...\t\033[31mOK!\033[0m"
+		fi
+	done
+}
+
+start(){
+
+	echo -en "[*] Terminazione processi residui da eventuali sessioni precedenti...\t"
+	killall -KILL java 2> /dev/null
+	sleep 0.5
+	killall -KILL rmid 2> /dev/null
+	sleep 0.5
+	killall -KILL tnameserv 2> /dev/null
+	sleep 0.5
+	killall -KILL rmiregistry 2> /dev/null
+	sleep 0.5
+	echo -e "\033[31mOK!\033[0m"
+	echo
+	echo -e "Su quale protocollo vuoi eseguire il sistema uniBCM?"
+	echo -e "**(1)** File"
+	echo -e "**(2)** Http"
+	read CHOOSE
+	case $CHOOSE in
+		1 ) PROTOCOL=file://
+		UNIBCM_PATH=$HOME/public_html/uniBCM/
+		;;
+		2 ) PROTOCOL=http://
+		UNIBCM_PATH=`hostname`.sci.univr.it:$PORT/
+		;;
+		* ) echo -e "[*] Scelta non valida!"
+		echo -e "[*] Protocollo di default: file"
+		PROTOCOL="file://"
+		UNIBCM_PATH=$HOME/public_html/uniBCM/
+		;;
+	esac
+	echo
+	echo -en "[*] Lancio cosNaming...\t"
+	#xterm -geometry 220x15+0+0 -T cosNaming -e tnameserv -ORBInitialPort 5555 &
+	tnameserv -ORBInitialPort 5555 &> /dev/null &
+	echo -e "\033[31mOK!\033[0m"
+	sleep 2
+	echo -en "[*] Lancio RMI Registry...\t"
+	#xterm -geometry 220x15+0+345 -T rmiRegistry -e rmiregistry 2222 &
+	rmiregistry 2222 &> /dev/null &
+	echo -e "\033[31mOK!\033[0m"
+	sleep 2
+	echo -en "[*] Lancio rmid...\t"
+	xterm -geometry 220x30+0+485 -T rmid -bg black -fg white -e rmid \
+	-J-Djava.rmi.server.codebase=$PROTOCOL$UNIBCM_PATH \
+	-J-Djava.security.policy=$PWD/policy/rmid.policy \
+	-C-Djava.rmi.dgc.leaseValue=10000 \
+	-log log &
+	echo -e "\033[31mOK!\033[0m"
+	echo -e "[*] PID associati ai processi:"
+	echo -e "\033[32m-tnameserv\033[0m: `ps | grep tnameserv | awk '{ print $1 }'`"
+	echo -e "\033[32m-rmiregistry\033[0m: `ps | grep rmiregistry | awk '{ print $1 }'`"
+	sleep 15
+	echo -en "[*] Lancio dei server...\t"
+	xterm -geometry 220x30+0+50 -T serversActivation -bg black -fg white -e java -classpath :$HOME/public_html/uniBCM/ \
+	-Djava.rmi.server.codebase=$PROTOCOL$UNIBCM_PATH \
+	-Djava.security.policy=$PWD/policy/Setup.policy \
+	-Dlogin.classeserver=server.login.LoginServer \
+	-Dreg.classeserver=server.reg.RegistrationServer \
+	-Dreg.policy=$PWD/policy/registrazione.policy \
+	-Dreg.impl.codebase=$PROTOCOL$UNIBCM_PATH \
+	-Djavax.net.ssl.trustStore=$PWD/cert/cert \
+	-Djavax.net.ssl.trustStorePassword=123456 \
+	-Djavax.net.ssl.keyStore=$PWD/cert/cert \
+	-Djavax.net.ssl.keyStorePassword=123456 \
+	-Djava.rmi.dgc.leaseValue=10000 \
+	Setup &
+	echo -e "\033[31mOK!\033[0m"
+	echo
+	
+}
+
+install(){
+	
+	# Installazione sistema uniBCM
+	mkdir -p $HOME/public_html/uniBCM/cert/
+	cp $PWD/cert/cert $HOME/public_html/uniBCM/cert/
+	mkdir -p $HOME/public_html/uniBCM/lib/
+	cp $PWD/lib/*.class $HOME/public_html/uniBCM/lib/
+	mkdir -p $HOME/public_html/uniBCM/mobile/
+	cp $PWD/mobile/*.class $HOME/public_html/uniBCM/mobile/
+	mkdir -p $HOME/public_html/uniBCM/mobile/magent/
+	mkdir -p $HOME/public_html/uniBCM/mobile/mserver/
+	cp $PWD/mobile/magent/*.class $HOME/public_html/uniBCM/mobile/magent/
+	cp $PWD/mobile/mserver/*.class $HOME/public_html/uniBCM/mobile/mserver/
+	mkdir -p $HOME/public_html/uniBCM/server/proxy/
+	mkdir -p $HOME/public_html/uniBCM/server/reg/
+	mkdir -p $HOME/public_html/uniBCM/server/login/
+	mkdir -p $HOME/public_html/uniBCM/server/central/
+	cp $PWD/server/proxy/Proxy.class $HOME/public_html/uniBCM/server/proxy/
+	cp $PWD/server/reg/*.class $HOME/public_html/uniBCM/server/reg/
+	cp $PWD/server/login/*.class $HOME/public_html/uniBCM/server/login/
+	cp $PWD/server/central/Central.class $HOME/public_html/uniBCM/server/central/
+	mkdir -p $HOME/public_html/uniBCM/client/
+	cp $PWD/client/*.class $HOME/public_html/uniBCM/client/
+	mkdir -p $HOME/public_html/uniBCM/img/
+	cp $PWD/img/* $HOME/public_html/uniBCM/img/
+	echo -e "[*] Impostazione del codebase in $HOME/public_html/uniBCM...\t\033[31mOK!\033[0m"
+	# Rimozione dei vecchi stub per non creare alcun problema di sorta
+	echo -en "[*] Creazione Stubs (JRMP/IIOP)...\t"
+	rm -f $HOME/public_html/uniBCM/server/proxy/*Stub*
+	rm -f $HOME/public_html/uniBCM/server/proxy/*Tie*
+	rm -f $HOME/public_html/uniBCM/server/login/*Stub*
+	rm -f $HOME/public_html/uniBCM/server/reg/*Stub*
+	rm -f $HOME/public_html/uniBCM/server/central/*Stub*
+	rm -f $HOME/public_html/uniBCM/server/central/*Tie*
+	rmic -d $HOME/public_html/uniBCM/ server.proxy.ProxyServer
+	rmic -iiop -d $HOME/public_html/uniBCM/ server.proxy.ProxyServer
+	rmic -d $HOME/public_html/uniBCM/ server.central.CentralServer
+	rmic -iiop -d $HOME/public_html/uniBCM/ server.central.CentralServer
+	rmic -d $HOME/public_html/uniBCM/ server.login.LoginServer
+	rmic -d $HOME/public_html/uniBCM/ server.reg.RegistrationServer
+	echo -e "\033[31mOK!\033[0m"
+    	echo -en "[*] Settaggio dei permessi per $HOME...\t"
+    	chmod -R 777 $HOME 2> /dev/null
+	echo -e "\033[31mOK!\033[0m"
+  
+}
+
+clear
+cat $PWD/logo/logo
+
+echo
+echo -e "\033[90m*** *** *** *** ***\033[0m"
+echo
+
+case "$1" in
+	"clean_pending" )
+	# Eliminazione tutti utenti pendenti del sistema
+	echo -e "\033[32mEliminazione tutti utenti pendenti del sistema...\033[0m"
+	echo
+	echo -e "[*] Eliminazione utenti pendenti dalla directory $PWD/pending/...\t\033[31mOK!\033[0m"
+	rm -fv $PWD/pending/*
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"clean_db" )
+	# Eliminazione tutti utenti registrati presso sistema uniBCM
+	echo -e "\033[32mEliminazione tutti utenti registrati al sistema...\033[0m"
+	echo
+	echo -e "[*] Eliminazione tutti utenti registrati dalla directory $PWD/dbUni/...\t\033[31mOK!\033[0m"
+	rm -fv $PWD/dbUni/*.usr
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"clean_codebase" )
+	# Pulizia del codebase in $HOME/public_html/uniBCM
+	echo -e "\033[32mPulizia del codebase del sistema...\033[0m"
+	echo
+	rm -Rf $HOME/public_html/uniBCM/
+	echo -e "[*] Pulizia del codebase presso la directory $HOME/public_html/uniBCM/...\t\033[31mOK!\033[0m"
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"clean" )
+	# Pulizia generale pacchetti specificati
+	echo -e "\033[32mPulizia del pacchetto $2...\033[0m"
+	echo
+	rm -rf $PWD/log/*
+	for pkg in $pkg_list
+	do
+		if [ "$2" = "$pkg" ]; then
+			clean ${!pkg} 2>/dev/null
+		fi
+	done
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"compile" )
+	# Compilazione pacchetti selezionati
+	echo -e "\033[32mCompilazione del pacchetto $2...\033[0m"
+	echo
+	for pkg in $pkg_list
+	do
+		if [ "$2" = "$pkg" ]; then
+			compile ${!pkg}
+		fi
+	done
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"install" )
+	echo -e "\033[31mW A R N I N G : \033[0mEssere sicuri di aver compilato con \033[33m./uniBCM compile all\033[0m"
+	echo
+	echo -e "\033[32mInstallazione sistema uniBCM in corso...\033[0m"
+	echo
+	install
+	echo
+	echo -e "\033[31mInstallazione del sistema uniBCM completata!\033[0m"
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	"start" )
+	# Lancio del sistema uniBCM
+	echo -e "\033[31mW A R N I N G : \033[0mEssere sicuri di aver compilato con \033[33m./uniBCM compile all\033[0m e aver installato con \033[33m./uniBCM install\033[0m"
+	echo
+	echo -e "\033[32mLancio del sistema uniBCM in corso...\033[0m"
+	echo
+	start
+	echo -e "\033[32mSistema uniBCM online!\033[0m"
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	* )
+	# Regole Utilizzo script
+	echo
+	echo "Per compilare: $0 compile <$pkg_list>"
+	echo
+	echo "Per installare il sistema uniBCM: $0 install (verificare di aver prima compilato!!!)"
+	echo
+	echo "Per lanciare il sistema uniBCM: $0 start (verificare di aver prima compilato e installato il sistema uniBCM!!!)"
+	echo
+	echo "Per pulire: $0 clean <$pkg_list>"
+	echo
+	echo "Per pulire il codebase: $0 clean_codebase"
+	echo
+	echo "Per eliminare tutte richieste pendenti: $0 clean_pending"
+	echo
+	echo "Per eliminare tutti gli utenti del sistema uniBCM: $0 clean_db"
+	echo
+	;;
+	
+esac
+exit 0
+
+
+
+

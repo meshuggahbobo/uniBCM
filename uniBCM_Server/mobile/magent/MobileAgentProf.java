@@ -1,0 +1,355 @@
+/*
+ * uniBCM Project: an exams's management system for university, developed with Java RMI
+ * 
+ * Copyleft 2009  uniBCM Team(Alberto Cordioli, Andrea Oboe)
+ *
+ * This program is free software: you can redistribute it and/or modify it under the terms
+ * of the GNU General Public License as published by the Free Software Foundation, either
+ * version 3 of the License, or (at your option) any later version.
+ * This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+ * See the GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License along with this program.
+ * If not, see http://www.gnu.org/licenses/.
+ *
+ * E-Mail:	cordioli [dot] alberto [at] gmail [dot] com
+ * 			oboe [dot] andrea [at] gmail [dot] com
+ */
+
+package mobile.magent;
+
+import java.util.Date;
+import server.central.*;
+import java.io.*;
+import java.lang.ClassNotFoundException;
+import lib.*;
+
+import java.net.InetAddress;
+
+import java.rmi.RemoteException;
+import java.rmi.UnknownHostException;
+
+import javax.swing.JOptionPane;
+
+import java.awt.event.*;
+import java.awt.*;
+import javax.swing.ListSelectionModel;
+
+/**
+ * Implemetazione di un MobileAgent per i professori
+ * @author uniBCM team
+ */
+public class MobileAgentProf extends javax.swing.JFrame implements MobileAgentItf, Serializable{
+
+	/** Referenza al server centrale */
+    private Central centralsrv;
+    /** Stringa utente */
+	private String user="";
+	/** Referenza del client sul quale e' in esecuzione il MobileAgent */
+	private Reference ref=null;
+
+	/**
+	 * Costruisce un nuovo MobileAgentProf 
+	 * @param centralsrv referenza server centrale
+	 * @param user Stringa utente
+	 */
+    public MobileAgentProf(Central centralsrv, String user){
+
+		this.centralsrv = centralsrv;
+		this.user = user;
+
+	}
+    
+    /** Creates new form MobileAgentProf */
+    public MobileAgentProf() {
+        initComponents();
+    }
+
+    /**
+     * @see MobileAgentItf#runSession()
+     */
+    public void runSession() throws ClassNotFoundException, IOException, RemoteException{
+        initComponents();
+        setVisible(true);
+	
+	
+	try{
+	
+	InetAddress ia = InetAddress.getLocalHost();
+
+	String ip = ia.getHostAddress();
+
+	ref = new Reference(user, ip, new Date());
+	centralsrv.addRef(ref);
+		
+	}catch(UnknownHostException uhe){
+    	javax.swing.JOptionPane.showMessageDialog(this,
+          	  	"Impossibile determinare l'indirizzo ip di questo host.",
+          	  	"Error Message",
+           	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+	}catch(RemoteException re){
+    	javax.swing.JOptionPane.showMessageDialog(this,
+          	  	"Impossibile contattare il server. L'applicazione verrà terminata.",
+          	  	"Error Message",
+           	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+    	System.exit(0);
+	}
+	
+	
+        refreshList();
+
+	}
+
+    /**
+     * Ricarica la lista dei corsi del professore
+     */
+    private void refreshList(){
+        jButton1.setEnabled(false);
+        String[] colNames = {"Nome Corso", "Anno Accademico"};
+        Corso[] courses = null;
+        
+        try{
+            courses = centralsrv.getCoursesList(user);
+        }catch(Exception e){
+            if(e instanceof RemoteException){
+            	javax.swing.JOptionPane.showMessageDialog(this,
+                  	  	"Impossibile contattare il server. L'applicazione verrà terminata.",
+                  	  	"Error Message",
+                   	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+            	System.exit(0);
+            }
+            else
+                	javax.swing.JOptionPane.showMessageDialog(this,
+                      	  	"Impossibile ritornare la lista degli esami dello studente",
+                      	  	"Error Message",
+                       	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+        }
+
+        Object[][] values = new Object[courses.length][2];
+        
+        for(int i=0; i<courses.length; i++){
+            values[i][0] = courses[i].getNomeCorso();
+            values[i][1] = courses[i].getAnnoAccademico();
+        }
+
+        coursesTable.setModel(new javax.swing.table.DefaultTableModel(
+            values,
+            colNames
+        ) {
+            Class[] types = new Class [] {
+                java.lang.String.class, java.lang.String.class
+            };
+            boolean[] canEdit = new boolean [] {
+                false, false
+            };
+
+            public Class getColumnClass(int columnIndex) {
+                return types [columnIndex];
+            }
+
+            public boolean isCellEditable(int rowIndex, int columnIndex) {
+                return false;
+            }
+        });
+        
+    }
+
+    /** This method is called from within the constructor to
+     * initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is
+     * always regenerated by the Form Editor.
+     */
+    @SuppressWarnings("unchecked")
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents() {
+
+        jPanel1 = new javax.swing.JPanel();
+        jLabel1 = new javax.swing.JLabel();
+        jLabel2 = new javax.swing.JLabel();
+        jButton1 = new javax.swing.JButton();
+        jSeparator1 = new javax.swing.JSeparator();
+        jScrollPane1 = new javax.swing.JScrollPane();
+        coursesTable = new javax.swing.JTable();
+        jLabel3 = new javax.swing.JLabel();
+        jLabel4 = new javax.swing.JLabel();
+        
+        int width = 363;
+        int height = 451;
+        
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+        
+        int x = (screen.width-width)/2;
+        int y = (screen.height-height)/2;
+        
+        setTitle("Mobile Agent Professore - JRMP");
+        setMinimumSize(new java.awt.Dimension(width, height));
+        setBounds(x,y,width,height);
+        setResizable(false);
+
+        jPanel1.setBorder(javax.swing.BorderFactory.createEtchedBorder());
+        jPanel1.setLayout(null);
+
+        jLabel1.setText("Benvenuto Prof. "+user);
+        jPanel1.add(jLabel1);
+        jLabel1.setBounds(10, 10, 230, 16);
+
+        jLabel2.setText("Lista corsi");
+        jPanel1.add(jLabel2);
+        jLabel2.setBounds(10, 50, 65, 16);
+
+        jButton1.setText("Registra Esame");
+        jButton1.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton1ActionPerformed(evt);
+            }
+        });
+
+	this.addWindowListener(new WindowAdapter(){
+
+		public void windowClosing(WindowEvent we){
+			try{
+			centralsrv.removeRef(ref);
+			}catch(RemoteException e){
+            	javax.swing.JOptionPane.showMessageDialog(null,
+                  	  	"Impossibile contattare il server. L'applicazione verrà terminata.",
+                  	  	"Error Message",
+                   	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+			}
+			System.exit(0);	
+		}
+	});
+
+        jPanel1.add(jButton1);
+        jButton1.setBounds(10, 360, 139, 29);
+
+        jSeparator1.setBackground(new java.awt.Color(51, 51, 51));
+        jPanel1.add(jSeparator1);
+        jSeparator1.setBounds(10, 30, 140, 12);
+
+        coursesTable.setModel(new javax.swing.table.DefaultTableModel(
+            new Object [][] {
+
+            },
+            new String [] {
+                "Nome Corso", "Anno Accademico"
+            }
+        ) {
+            Class[] types = new Class [] {
+                java.lang.String.class, java.lang.String.class
+            };
+            boolean[] canEdit = new boolean [] {
+                false, false
+            };
+
+            public Class getColumnClass(int columnIndex) {
+                return types [columnIndex];
+            }
+
+            public boolean isCellEditable(int rowIndex, int columnIndex) {
+                return false;
+            }
+        });
+        coursesTable.setColumnSelectionAllowed(true);
+        coursesTable.addMouseListener(new java.awt.event.MouseAdapter() {
+            public void mouseClicked(java.awt.event.MouseEvent evt) {
+                coursesTableMouseClicked(evt);
+            }
+        });
+        jScrollPane1.setViewportView(coursesTable);
+ 
+        coursesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        jPanel1.add(jScrollPane1);
+        jScrollPane1.setBounds(10, 70, 240, 270);
+
+        jLabel3.setIcon(new javax.swing.ImageIcon(getClass().getResource("/img/logo.gif"))); // NOI18N
+        jLabel4.setIcon(new javax.swing.ImageIcon(getClass().getResource("/img/prof.png"))); // NOI18N
+
+        jPanel1.add(jLabel3);
+        jLabel3.setBounds(160, 280, 200, 290);
+
+        jPanel1.add(jLabel4);
+        jLabel4.setBounds(280, 20, 60, 70);
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
+        getContentPane().setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, 351, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, 439, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+
+        pack();
+    }// </editor-fold>//GEN-END:initComponents
+
+    private void coursesTableMouseClicked(java.awt.event.MouseEvent evt) {//GEN-FIRST:event_coursesTableMouseClicked
+        // TODO add your handling code here:
+        int row = coursesTable.getSelectedRow();
+
+        if(row != -1)
+            jButton1.setEnabled(true);
+        else
+            jButton1.setEnabled(false);
+    }//GEN-LAST:event_coursesTableMouseClicked
+
+    private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
+        // TODO add your handling code here:
+        String courseName = (String)coursesTable.getValueAt(coursesTable.getSelectedRow(), 0);
+        String userID = JOptionPane.showInputDialog("Inserire matricola studente");
+        int value=0;
+        do{
+            String tmp = JOptionPane.showInputDialog("Inserire voto in trentesimi");
+            try{
+                value = Integer.parseInt(tmp);
+            }catch(NumberFormatException nfe){
+                JOptionPane.showMessageDialog(this, "Formato non corretto! Riprovare", "Error Message", JOptionPane.ERROR_MESSAGE);
+            }
+        }while(value < 18 || value > 33);
+
+        String result="";
+        try{
+            result=centralsrv.addExam(userID, courseName, value);
+            JOptionPane.showMessageDialog(this, result, "Info Message", JOptionPane.INFORMATION_MESSAGE);
+        }catch(RemoteException e){
+        	javax.swing.JOptionPane.showMessageDialog(null,
+              	  	"Impossibile contattare il server",
+              	  	"Error Message",
+               	 	javax.swing.JOptionPane.ERROR_MESSAGE);
+		}
+
+        
+    }//GEN-LAST:event_jButton1ActionPerformed
+
+    /**
+    * @param args the command line arguments
+    */
+    public static void main(String args[]) {
+        java.awt.EventQueue.invokeLater(new Runnable() {
+            public void run() {
+                new MobileAgentProf().setVisible(true);
+            }
+        });
+    }
+
+    // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JTable coursesTable;
+    private javax.swing.JButton jButton1;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel4;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JSeparator jSeparator1;
+    // End of variables declaration//GEN-END:variables
+
+}

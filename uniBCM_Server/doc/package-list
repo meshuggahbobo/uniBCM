@@ -1,0 +1,10 @@
+
+client
+lib
+mobile
+mobile.magent
+mobile.mserver
+server.central
+server.login
+server.proxy
+server.reg

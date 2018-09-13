@@ -1,0 +1,322 @@
+#!/bin/bash
+
+###############################################################################################
+# uniBCM Project: an exams's management system for university, developed with Java RMI
+# 
+# Copyleft 2009  uniBCM Team(Alberto Cordioli, Andrea Oboe)
+#
+# This program is free software: you can redistribute it and/or modify it under the terms
+# of the GNU General Public License as published by the Free Software Foundation, either
+# version 3 of the License, or (at your option) any later version.
+# This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+# without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+# See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License along with this program.
+# If not, see http://www.gnu.org/licenses/.
+# 
+# E-Mail:	cordioli [dot] alberto [at] gmail [dot] com
+#  			oboe [dot] andrea [at] gmail [dot] com
+################################################################################################
+
+# Script di compilazione, configurazione e di lancio per i client JRMP e IIOP del sistema uniBCM
+
+################################  PARAMETRI DI CONFIGURAZIONE ##################################
+# Sostituire qui sotto la matricola o l'user id dell'utente che si occuperà di
+# lanciare il server-side del sistema uniBCM
+SERVER_USER_ID=vr044794
+# NB: essenziale| Password SSL da settare!
+PASSWORD=123456
+################################################################################################
+
+HOST=`hostname`
+CLIENT_USER_ID=`whoami`
+SERVER_HOME=`finger $SERVER_USER_ID 2> /dev/null | grep Directory | awk '{print $2}'`
+
+failure(){
+
+	if [ ! $? -eq 0 ]; then
+		echo -e "\033[31mERRORE!\033[0m" >&2
+		echo
+		echo -e "\033[33mVedere file .log per descrizione dettagliata degli errori.\033[0m"
+		echo
+	    exit 1
+	else
+		echo -e "\033[31mOK!\033[0m"
+	fi
+
+}
+
+start(){
+
+	rm -rf $PWD/.log 2> /dev/null
+	echo -en "[*] Terminazione processi residui da eventuali sessioni precedenti...\t"
+	killall -KILL java 2> /dev/null
+	echo -e "\033[31mOK!\033[0m"
+	echo
+	if [ -e $PWD/config/.config ]; then
+		echo -e "[!] E' stato trovato un file di configuarzione con le seguenti proprieta' di lancio:"
+		echo
+		echo -e "\033[32mServer\033[0m: `awk -F ':' '{ print $1 }' $PWD/config/.config`"
+		echo -e "\033[32mDominio\033[0m: `awk -F ':' '{ print $2 }' $PWD/config/.config`"
+		echo -e "\033[32mProtocollo\033[0m: `awk -F ':' '{ print $3 }' $PWD/config/.config`"
+		if [ `awk -F ':' '{ print $3 }' $PWD/config/.config` = http ]; then
+			echo -e "\033[32mPorta\033[0m: `awk -F ':' '{ print $4 }' $PWD/config/.config`"
+		fi
+		echo
+		echo -e "Vuoi utilizzare questa configurazione? (y/n)"
+		read CHOOSE
+		echo
+		case $CHOOSE in
+			y | Y )
+			SERVER=`awk -F ':' '{ print $1 }' $PWD/config/.config`
+			DOMAIN=`awk -F ':' '{ print $2 }' $PWD/config/.config`
+			PROTOCOL=`awk -F ':' '{ print $3 }' $PWD/config/.config`
+			PORT=`awk -F ':' '{ print $4 }' $PWD/config/.config`
+			;;
+			n | N )
+			echo
+			configuration
+			;;
+			* )
+			echo
+			echo "[*] Scelta non riconosciuta"
+			echo "[*] Settaggio nuova configurazione in corso..."
+			echo
+			configuration
+		esac
+	else
+		configuration
+	fi
+	# Verifica se esistano le classi per lanciare il client jrmp e/o iiop
+	if [ -e $PWD/ClientJRMPBootstrap.class ];then
+		echo -en "[*] Lancio client JRMP bootstrap...\t"
+		java -Djava.security.policy=$PWD/policy/jrmp.policy \
+		-Djavax.net.ssl.trustStore=$PWD/cert/cert \
+		-Djavax.net.ssl.trustStorePassword=$PASSWORD \
+		-Djava.security.debug=access,failure \
+		ClientJRMPBootstrap $SERVER.sci.univr.it $PROTOCOL 2> $PWD/.log &
+	echo -e "\033[31mOK!\033[0m"
+	fi
+	sleep 3
+	if [ -e $PWD/ClientIIOPBootstrap.class ];then
+		echo -en "[*] Lancio client IIOP bootstrap...\t"
+		IP_ADD=`ifconfig | grep 'inet addr:' | grep -v '127.0.0.1' | cut -d: -f2 | awk '{print $1}'`
+		java -Djava.security.policy=$PWD/policy/iiop.policy \
+		-Djavax.net.ssl.trustStore=$PWD/cert/cert \
+		-Djavax.net.ssl.trustStorePassword=$PASSWORD \
+		ClientIIOPBootstrap $SERVER.sci.univr.it $PROTOCOL $IP_ADD 2>> $PWD/.log &
+	echo -e "\033[31mOK!\033[0m"
+	fi
+	sleep 3
+
+}
+
+configuration(){
+	
+	echo -e "Su quale host è in esecuzione il sistema uniBCM (senza dominio) ?"
+	read SERVER
+	echo
+	echo -e "Su quale dominio?"
+	read DOMAIN
+	echo
+	echo "Su quale protocollo vuoi accedere a uniBCM?"
+	echo "**(1)** File"
+	echo "**(2)** Http"
+	read CHOOSE
+	case $CHOOSE in
+		1 )
+		PROTOCOL=file
+		;;
+		2 )
+		PROTOCOL=http
+		echo
+		echo -e "Su quale porta?"
+		read PORT
+		echo
+		;;
+		* )
+		echo "[*] Scelta non riconosciuta."
+		echo "[*] Protocollo di default: file"
+		PROTOCOL=file
+		echo
+		;;
+	esac
+	echo
+	echo -en "[*] Salvataggio configurazione in corso...\t"
+	echo "$SERVER:$DOMAIN:$PROTOCOL:$PORT" > $PWD/config/.config
+	echo -e "\033[31mOK!\033[0m"
+	echo -en "[*] Configurazione dei file di policy in corso...\t";
+	
+	# Configurazione automatica dei file di policy
+	# Non modificare se non si sa quello che si sta facendo!
+	
+	# CONFIGURAZIONI COMUNI AI DUE TIPI DI PROTOCOLLO
+	# Settiamo inizialmente l'indirizzo dell'host su cui risiede il server (senza dominio)
+	cat $PWD/config/iiop.policy | sed 's/_UNIBCMSERVER/'$SERVER'/g' > $PWD/policy/iiop.policy
+	cat $PWD/config/jrmp.policy | sed 's/_UNIBCMSERVER/'$SERVER'/g' > $PWD/policy/jrmp.policy
+	# Settiamo il dominio su cui è in esecuzione il server
+	sed -i 's/_DOMAIN/'$DOMAIN'/g' $PWD/policy/iiop.policy
+	sed -i 's/_DOMAIN/'$DOMAIN'/g' $PWD/policy/jrmp.policy
+	# Settiamo il nome dell'host corrente che sara' il nostro client
+	sed -i 's/_UNIBCMCLIENT/'$HOST'/g' $PWD/policy/jrmp.policy
+	# Settiamo la path del client uniBCM, comprensivo di protocollo
+	sed -i 's,_CLIENTPROT,'file://',g' $PWD/policy/iiop.policy
+	sed -i 's,_CLIENTPATH,'$PWD/-',g' $PWD/policy/iiop.policy
+	sed -i 's,_CLIENTPROT,'file://',g' $PWD/policy/jrmp.policy
+	sed -i 's,_CLIENTPATH,'$PWD/-',g' $PWD/policy/jrmp.policy
+	# Settiamo la path corretta per il server uniBCM
+	sed -i 's,_SERVERHOME,'$SERVER_HOME',g' $PWD/policy/iiop.policy
+	sed -i 's,_SERVERHOME,'$SERVER_HOME',g' $PWD/policy/jrmp.policy
+
+	#vedere se milgiolare la cosa se gli utenti non sono studeti!
+	if [ $PROTOCOL = file ]; then
+		# CONFIGURAZIONI SPECIFICHE AL PROTOCOLLO FILE
+		sed -i 's,_PROTOCOL,'file:///',g' $PWD/policy/iiop.policy
+		sed -i 's,_PATH,'$SERVER_HOME/public_html/uniBCM',g' $PWD/policy/iiop.policy
+		sed -i 's,//_FILE,'',g' $PWD/policy/iiop.policy
+	
+		sed -i 's,_PROTOCOL,'file:///',g' $PWD/policy/jrmp.policy
+		sed -i 's,_PATH,'$SERVER_HOME/public_html/uniBCM',g' $PWD/policy/jrmp.policy
+		sed -i 's,//_FILE,'',g' $PWD/policy/jrmp.policy		
+	else
+		# CONFIGURAZIONI SPECIFICHE AL PROTOCOLLO HTTP
+		sed -i 's,_PROTOCOL,'http://',g' $PWD/policy/iiop.policy
+		sed -i 's,_PATH,'$SERVER.$DOMAIN:$PORT',g' $PWD/policy/iiop.policy
+		sed -i 's,_PORT,'$PORT',g' $PWD/policy/iiop.policy
+		sed -i 's,//_COMMENT,'',g' $PWD/policy/iiop.policy
+		sed -i 's,//_HTTP,'',g' $PWD/policy/iiop.policy		
+
+		sed -i 's,_PROTOCOL,'http://',g' $PWD/policy/jrmp.policy
+		sed -i 's,_PATH,'$SERVER.$DOMAIN:$PORT',g' $PWD/policy/jrmp.policy
+		sed -i 's,_PORT,'$PORT',g' $PWD/policy/jrmp.policy
+		sed -i 's,//_COMMENT,'',g' $PWD/policy/jrmp.policy
+		sed -i 's,//_HTTP,'',g' $PWD/policy/jrmp.policy		
+	fi
+	
+	echo -e "\033[31mOK!\033[0m"
+	echo
+	sleep 2
+	
+}
+
+compile(){
+
+	# Compilazione client uniBCM
+	mkdir -p $PWD/client/
+	#prova con il whereis o con il finger per la home e vedere se possibile copiarla via http
+	echo -en "[*] Recupero classi necessarie per la compilazione...\t"
+	if [ ! -e "$SERVER_HOME/public_html/uniBCM/client/Client.class" ]; then
+		echo -e "\033[31mERRORE!\033[0m"
+		echo
+		exit 1
+	else
+		echo -e "\033[31mOK!\033[0m"
+	fi
+	
+	cp $SERVER_HOME/public_html/uniBCM/client/Client.class $PWD/client/
+	
+	case "$1" in
+		"jrmp" ) echo -en "[*] Compilazione del client JRMP...\t"
+		cat $PWD/config/ClientJRMPBootstrap.java | sed 's,_SERVERHOME,'$SERVER_HOME',g' > $PWD/ClientJRMPBootstrap.java
+		javac ClientJRMPBootstrap.java 2> $PWD/.log || failure
+		echo -e "\033[31mOK!\033[0m"
+		;;
+		"iiop" ) echo -en "[*] Compilazione del client IIOP...\t"
+		cat $PWD/config/ClientIIOPBootstrap.java | sed 's,_SERVERHOME,'$SERVER_HOME',g' > $PWD/ClientIIOPBootstrap.java
+		javac ClientIIOPBootstrap.java 2> $PWD/.log || failure
+		;;
+		* ) echo -en "[*] Compilazione del client JRMP...\t"
+		cat $PWD/config/ClientJRMPBootstrap.java | sed 's,_SERVERHOME,'$SERVER_HOME',g' > $PWD/ClientJRMPBootstrap.java
+		cat $PWD/config/ClientIIOPBootstrap.java | sed 's,_SERVERHOME,'$SERVER_HOME',g' > $PWD/ClientIIOPBootstrap.java
+		javac ClientJRMPBootstrap.java 2> $PWD/.log || failure
+		echo -e "\033[31mOK!\033[0m"
+		echo -en "[*] Compilazione del client IIOP...\t"
+		javac ClientIIOPBootstrap.java 2>> $PWD/.log || failure
+		echo -e "\033[31mOK!\033[0m"
+	esac
+	
+}
+
+clean(){
+	
+	rm -f $PWD/*~ 2> /dev/null
+	rm -f $PWD/*.java 2> /dev/null
+	rm -f $PWD/client/*~ 2> /dev/null
+	rm -f $PWD/policy/*~ 2> /dev/null
+	rm -f $PWD/config/*~ 2> /dev/null
+	echo -e "[*] Rimozione dei file temporanei...\t\033[31mOK!\033[0m"
+
+	rm -f $PWD/.* 2> /dev/null
+	rm -f $PWD/client/.* 2> /dev/null
+	rm -f $PWD/policy/.* 2> /dev/null
+	rm -f $PWD/config/.* 2> /dev/null
+	echo -e "[*] Rimozione dei file nascosti...\t\033[31mOK!\033[0m"
+	
+	rm -f $PWD/*.class 2> /dev/null
+	rm -f $PWD/client/*.class 2> /dev/null
+	echo -e "[*] Rimozione delle classi compilate...\t\033[31mOK!\033[0m"
+	
+	rm -f $PWD/policy/* 2> /dev/null
+	echo -e "[*] Rimozione dei file di policy...\t\033[31mOK!\033[0m"
+	
+}
+
+
+
+clear
+cat $PWD/logo/logo
+
+echo
+echo -e "\033[90m*** *** *** *** ***\033[0m"
+echo
+
+if [ ! -d "$SERVER_HOME" ]; then
+	echo -e "[*] L'utente specificato nei parametri di configurazione non esiste...\t\033[31mERRORE!\033[0m"
+	echo
+	exit 1
+fi
+
+case "$1" in
+	"clean" )
+	# Pulizia generale 
+	echo -e "\033[32mPulizia generale del/i client uniBCM in corso....\033[0m"
+	echo
+	clean
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+
+	"compile" )
+	# Compilazione dei client JRMP e/o IIOP
+	echo -e "\033[32mCompilazione del/i client uniBCM in corso....\033[0m"
+	echo
+	compile $2
+	echo
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+
+	"start" )
+	# Lancio del client uniBCM
+	echo -e "\033[31mW A R N I N G : \033[0mEssere sicuri di aver compilato con \033[33m./uniBCM compile <jrmp iiop all>\033[0m"
+	echo
+	echo -e "\033[32mLancio del/i client uniBCM in corso....\033[0m"
+	echo
+	start
+	echo -e "\033[90m*** *** *** *** ***\033[0m"
+	;;
+	
+	* )
+	# Regole Utilizzo script
+	echo -e "\033[32mRegole di utilizzo script....\033[0m"
+	echo
+	echo "Per compilare: $0 compile <jrmp iiop all>"
+	echo
+	echo "Per lanciare il client uniBCM: $0 start (verificare di aver prima compilato il client uniBCM!!!)"
+	echo
+	echo "Per pulire: $0 clean"
+	echo
+	;;
+	
+esac
+exit 0
